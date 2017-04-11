@@ -1,149 +1,110 @@
-import httprocessing.*;
-import processing.video.*;
+import http.requests.*; // add lib "http requests for processing"
+import processing.video.*; // add lib "video"
+
+/* PREFS */
+String api_key = "";
+String api_secret = "";
+
+boolean useCam = true;
+String defaultPath = "lena.jpg"; // replace with /data/image for onetime analysis
 
 
 Capture cam;
-PImage photo; 
-int photoAge; 
+PImage photo;
 
-String api_key = "YOUR_KEY";
-String api_secret = "YOUR_SECRET";
-
-String jonImg = "/Users/jrogers/Documents/Processing/faceplusplus_with_cam/data/jon.jpg";
-String photoImg = "/Users/jrogers/Documents/Processing/faceplusplus_with_cam/data/camPhoto.jpg";
-
-
-
+String camPath = "";
+String debugText = "Press Spacebar";
 
 PostRequest post; 
 
 public void setup() 
 {
- size(640,360); 
- // size(1280,720); 
-  
-  photo = loadImage(jonImg); 
-  //set up camera
-  
+  size(640, 480); 
+
+
   //CAMERA SETUP
-  String[] cameras = Capture.list();
-  if (cameras == null) {
-    println("Failed to retrieve the list of available cameras, will try the default...");
-    // cam = new Capture(this, 640, 480);
-  } 
-  if (cameras.length == 0) {
-    println("There are no cameras available for capture.");
-    exit();
-  } else {
-    println("Available cameras:");
-    for (int i = 0; i < cameras.length; i++) {
-      println(cameras[i]);
-    }
-     println(cameras[3]);
-    cam = new Capture(this, cameras[3]); // 15 when usb cam on (or check other) - testing with FT cam - fps 1? cam  
-    //cam = new Capture(this, 1280, 960);
-    cam.start();  
+  // just use default
+  cam = new Capture(this, 640, 480);
+  cam.start();
 
+  if (!useCam) {
+    photo = loadImage(defaultPath); 
+    analyzeFace(defaultPath);
   }
-  
-  // POST set up
-  post = new PostRequest("https://apius.faceplusplus.com/v2/detection/detect");
-
-  post.addData("api_key", api_key);
-  post.addData("api_secret", api_secret);
-  
-  // I needed full path to the image file since relative wasn't working for PostRequest library.
-  // Obviously, with the camera you will need to save the PImage as a File before doing this.
-  // Also note, you can call post.addFile with the second argument being a Java File object, if that's easier.
- // post.addFile("img", "/Users/mikehenrty/Documents/Processing/simple_json_POST_forFace__base64/data/jon.jpg");
-  post.addFile("img", jonImg);
- 
-  post.send();
-  println(post.getContent());
-
-  JSONObject response = parseJSONObject(post.getContent());
-  JSONArray face = response.getJSONArray("face");
-  JSONObject attribute = face.getJSONObject(0);
-  JSONObject at2 = attribute.getJSONObject("attribute");
-  JSONObject age = at2.getJSONObject("age");
-  println ("Welcome Jon your age is..." + age.getInt("value"));
-  photoAge = age.getInt("value"); 
-  println ("photo age = " + photoAge); 
-  
-  println ("starting draw"); 
-
 }
 
 void draw()
 {
-  // show current saved image
-  //image(photo, 0,0); 
- 
-     if (cam.available()) {
-     cam.read();
-     image(cam, 0, 0); 
-   }
-  
-  fill(200,30,30);
-  textSize(60);
-  text(photoAge, 330, 100); 
-  
+  if (useCam) {
+    if (cam.available()) {
+      cam.read();
+      image(cam, 0, 0);
+    }
+  } else {
+    image(photo, 0, 0);
+  }
 
-  
+  fill(0, 255, 0);
+  text(debugText, 10, 10, width-20, height-20);
 }
 
+void keyPressed() {
 
+  // switch to live cam
+  if (key == 'c') {
+    if (useCam) {
+      useCam = false;
+    } else {
+      useCam = true;
+    }
+  }
 
-// ------------------------ KEY PRESSED ----------------
+  // take and anaylze cam picture
+  if (keyCode == 32) {
+    if (useCam) {
+      String date = new java.text.SimpleDateFormat("yyyy_MM_dd_kkmmss").format(new java.util.Date ()); 
+      camPath = "cam_"+date+".jpg";
+      cam.save("data/"+camPath);
+      debugText = "Processing...";
+      photo = loadImage(camPath);
+      analyzeFace(camPath);
+      useCam = false;
+    } else {
+      useCam = true;
+    }
+  }
+}
 
-void keyReleased() {
-  // in mirror code this will be the mat being stepped on.. . 
-  
-  // take a picture 
-  
-     image(cam, 0, 0); 
-     PImage screengrab = createImage(width, height, ALPHA);
-     save(photoImg); 
-
-  // post it 
-   post = new PostRequest("https://apius.faceplusplus.com/v2/detection/detect");
-
+void analyzeFace(String imgPath) {
+  // POST DETECT FACE
+  post = new PostRequest("https://api-us.faceplusplus.com/facepp/v3/detect");
   post.addData("api_key", api_key);
   post.addData("api_secret", api_secret);
-  
-  // I needed full path to the image file since relative wasn't working for PostRequest library.
-  // Obviously, with the camera you will need to save the PImage as a File before doing this.
-  // Also note, you can call post.addFile with the second argument being a Java File object, if that's easier.
- // post.addFile("img", "/Users/mikehenrty/Documents/Processing/simple_json_POST_forFace__base64/data/jon.jpg");
- 
-  
-  post.addFile("img", photoImg);
- 
+
+  //requires fullpath to image v
+  post.addFile("image_file", dataPath(imgPath));
+
   post.send();
-  
-  
   println(post.getContent());
-  
-  
+
+  // PARSE DETECT FACE
   JSONObject response = parseJSONObject(post.getContent());
-  try{
-  JSONArray face = response.getJSONArray("face");
-  JSONObject attribute = face.getJSONObject(0);
-  JSONObject at2 = attribute.getJSONObject("attribute");
-  JSONObject age = at2.getJSONObject("age");
-  println ("Welcome Jon your age is..." + age.getInt("value"));
-  
-  photoAge = age.getInt("value");
-  } catch (Exception e)
- 
-  { 
-    e.printStackTrace();
-    println("sorry, couldnt' find your age"); 
-  }
-  
-  // set age. 
-  
-  // would be nicer to have in a set of functions - but the void keyReleased forces this rough hack... will do for now.. 
-   
-  
+  JSONArray faces = response.getJSONArray("faces");
+  JSONObject attribute = faces.getJSONObject(0);
+  String face_token = attribute.getString("face_token");
+
+  // POST GET ATTRIBUTES
+  post = new PostRequest("https://api-us.faceplusplus.com/facepp/v3/face/analyze");
+  post.addData("api_key", api_key);
+  post.addData("api_secret", api_secret);
+  post.addData("return_landmark", "0"); // set to 1 for landmarks
+  post.addData("return_attributes", "gender,age,smiling,headpose,facequality,blur,eyestatus,ethnicity");
+  post.addData("face_tokens", face_token);
+
+  post.send();
+  println(post.getContent());
+
+  // extract JSON values from above
+
+  debugText = post.getContent();
 }
